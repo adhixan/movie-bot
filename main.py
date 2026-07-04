@@ -1,4 +1,4 @@
-# main.py - Works with python-telegram-bot 13.15
+# main.py - Complete working version for Render
 import sys
 import os
 import logging
@@ -39,7 +39,7 @@ class HealthHandler(http.server.SimpleHTTPRequestHandler):
 
 def run_health_server():
     """Run a simple HTTP server for Render health checks"""
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 8080))
     
     try:
         with socketserver.TCPServer(("", port), HealthHandler) as httpd:
@@ -63,14 +63,14 @@ class MovieBot:
     """Main bot application class"""
     
     def __init__(self):
-        self.updater = None
+        self.app = None
         self.handlers = MovieHandlers()
+        self.initialized = False
     
     def run(self):
-        """Start the bot using Updater (version 13.15)"""
+        """Start the bot"""
         try:
-            # Import from version 13.15
-            from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+            from telegram.ext import Application, CommandHandler, MessageHandler, filters
             
             if not Config.TELEGRAM_TOKEN:
                 raise ValueError("TELEGRAM_TOKEN is required")
@@ -82,44 +82,43 @@ class MovieBot:
             # Start HTTP server in background for Render
             server_thread = threading.Thread(target=run_health_server, daemon=True)
             server_thread.start()
-            time.sleep(1)  # Give server time to start
+            time.sleep(1)
             
-            # Create updater with version 13.15 (no bug)
-            self.updater = Updater(token=Config.TELEGRAM_TOKEN, use_context=True)
-            dispatcher = self.updater.dispatcher
+            # Create application
+            self.app = Application.builder().token(Config.TELEGRAM_TOKEN).build()
+            
+            # Add handlers
+            self.app.add_handler(CommandHandler("start", self.handlers.start))
+            self.app.add_handler(CommandHandler("help", self.handlers.help_command))
+            self.app.add_handler(CommandHandler("search", self.handlers.search))
+            self.app.add_handler(CommandHandler("stats", self.handlers.stats))
+            self.app.add_handler(CommandHandler("update", self.handlers.update_index))
+            self.app.add_handler(CommandHandler("about", self.handlers.about))
+            self.app.add_handler(
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    self.handlers.handle_movie_query
+                )
+            )
+            self.app.add_handler(
+                MessageHandler(
+                    filters.FORWARDED,
+                    self.handlers.handle_forwarded_movie
+                )
+            )
+            self.app.add_handler(
+                MessageHandler(
+                    filters.ALL & filters.ChatType.CHANNEL,
+                    self.handlers.handle_channel_post
+                )
+            )
             
             # Initialize index
-            init_channel_index(None)
+            init_channel_index(self.app)
             import asyncio
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(self.handlers.initialize_index())
-            
-            # Register handlers
-            dispatcher.add_handler(CommandHandler("start", self.handlers.start))
-            dispatcher.add_handler(CommandHandler("help", self.handlers.help_command))
-            dispatcher.add_handler(CommandHandler("search", self.handlers.search))
-            dispatcher.add_handler(CommandHandler("stats", self.handlers.stats))
-            dispatcher.add_handler(CommandHandler("update", self.handlers.update_index))
-            dispatcher.add_handler(CommandHandler("about", self.handlers.about))
-            dispatcher.add_handler(
-                MessageHandler(
-                    Filters.text & ~Filters.command,
-                    self.handlers.handle_movie_query
-                )
-            )
-            dispatcher.add_handler(
-                MessageHandler(
-                    Filters.forwarded,
-                    self.handlers.handle_forwarded_movie
-                )
-            )
-            dispatcher.add_handler(
-                MessageHandler(
-                    Filters.chat_type.channel,
-                    self.handlers.handle_channel_post
-                )
-            )
             
             print("=" * 60)
             print("🤖 Movie Bot is starting...")
@@ -137,8 +136,7 @@ class MovieBot:
             print("")
             
             # Start polling
-            self.updater.start_polling()
-            self.updater.idle()
+            self.app.run_polling(drop_pending_updates=True)
             
         except Exception as e:
             logger.error(f"Failed to start bot: {e}")
