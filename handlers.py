@@ -1,12 +1,12 @@
-# handlers.py - Updated for version 20.8
+# handlers.py
 import asyncio
 import logging
 from datetime import datetime
 from telegram import Update
-from telegram.ext import ContextTypes
+from telegram.ext import CallbackContext
 from api_clients import api_manager
 from config import Config
-from channel_index import get_channel_index
+from channel_index import get_channel_index, init_channel_index
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,29 @@ class MovieHandlers:
         return index
     
     @staticmethod
-    async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def initialize_index():
+        """Initialize the channel index"""
+        try:
+            logger.info("📂 Initializing channel index...")
+            index = MovieHandlers.get_index()
+            if index:
+                logger.info("📂 Building initial channel index...")
+                await index.build_index()
+                logger.info("✅ Bot initialization complete!")
+                
+                stats = index.get_stats()
+                if stats['total_movies'] == 0:
+                    logger.info("💡 No movies in index. To add movies:")
+                    logger.info("1. Forward a movie from your channel to this bot")
+                    logger.info("2. The bot will automatically add it to the index")
+                    logger.info("3. Then users can search for it")
+            else:
+                logger.error("❌ Failed to initialize channel index")
+        except Exception as e:
+            logger.error(f"Error during initialization: {e}")
+    
+    @staticmethod
+    async def start(update: Update, context: CallbackContext) -> None:
         """Handle /start command"""
         message = update.effective_message
         if not message:
@@ -50,7 +72,7 @@ class MovieHandlers:
         await message.reply_text(welcome_message, parse_mode='Markdown')
     
     @staticmethod
-    async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def help_command(update: Update, context: CallbackContext) -> None:
         """Handle /help command"""
         message = update.effective_message
         if not message:
@@ -77,7 +99,7 @@ class MovieHandlers:
         await message.reply_text(help_text, parse_mode='Markdown')
     
     @staticmethod
-    async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def handle_channel_post(update: Update, context: CallbackContext) -> None:
         """Handle channel posts (when bot receives messages from channel)"""
         try:
             channel_post = update.channel_post
@@ -138,7 +160,7 @@ class MovieHandlers:
             logger.error(f"Error handling channel post: {e}")
     
     @staticmethod
-    async def handle_forwarded_movie(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def handle_forwarded_movie(update: Update, context: CallbackContext) -> None:
         """Handle forwarded movie messages to add to index"""
         try:
             message = update.effective_message
@@ -253,7 +275,7 @@ class MovieHandlers:
                 pass
     
     @staticmethod
-    async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def search(update: Update, context: CallbackContext) -> None:
         """Handle /search command"""
         message = update.effective_message
         if not message:
@@ -322,7 +344,7 @@ class MovieHandlers:
             await message.reply_text("❌ An error occurred. Please try again later.")
     
     @staticmethod
-    async def send_movie_from_channel(update: Update, context: ContextTypes.DEFAULT_TYPE, result: dict):
+    async def send_movie_from_channel(update: Update, context: CallbackContext, result: dict):
         """Send movie file from channel"""
         message = update.effective_message
         if not message:
@@ -368,7 +390,7 @@ class MovieHandlers:
             )
     
     @staticmethod
-    async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def stats(update: Update, context: CallbackContext) -> None:
         """Handle /stats command"""
         message = update.effective_message
         if not message:
@@ -398,7 +420,7 @@ class MovieHandlers:
         await message.reply_text(stats_text, parse_mode='Markdown')
     
     @staticmethod
-    async def update_index(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def update_index(update: Update, context: CallbackContext) -> None:
         """Handle /update command - manually update index"""
         message = update.effective_message
         if not message:
@@ -436,7 +458,7 @@ class MovieHandlers:
             await message.reply_text(f"❌ Error updating index: {str(e)}")
     
     @staticmethod
-    async def about(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def about(update: Update, context: CallbackContext) -> None:
         """Handle /about command"""
         message = update.effective_message
         if not message:
@@ -462,7 +484,7 @@ class MovieHandlers:
         await message.reply_text(about_text, parse_mode='Markdown')
     
     @staticmethod
-    async def handle_movie_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def handle_movie_query(update: Update, context: CallbackContext) -> None:
         """Handle text messages as movie queries"""
         message = update.effective_message
         if not message:
