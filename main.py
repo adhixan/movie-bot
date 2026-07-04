@@ -1,14 +1,12 @@
-# main.py - Works with python-telegram-bot 20.8
+# main.py - Works with python-telegram-bot 13.15
 import sys
 import os
-import asyncio
 import logging
 import threading
 import time
 import http.server
 import socketserver
 from dotenv import load_dotenv
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 # Load environment variables
 load_dotenv()
@@ -43,127 +41,37 @@ def run_health_server():
     """Run a simple HTTP server for Render health checks"""
     port = int(os.environ.get("PORT", 5000))
     
-    # Try to bind with retry
-    for attempt in range(3):
-        try:
-            with socketserver.TCPServer(("", port), HealthHandler) as httpd:
-                print(f"✅ Health server running on port {port}")
-                httpd.serve_forever()
-            break
-        except OSError as e:
-            if "Address already in use" in str(e):
-                print(f"⚠️ Port {port} busy, trying {port + 1}")
-                port += 1
-            else:
-                print(f"❌ Health server error: {e}")
-                break
+    try:
+        with socketserver.TCPServer(("", port), HealthHandler) as httpd:
+            print(f"✅ Health server running on port {port}")
+            httpd.serve_forever()
+    except OSError as e:
+        if "Address already in use" in str(e):
+            print(f"⚠️ Port {port} busy, trying {port + 1}")
+            port += 1
+            try:
+                with socketserver.TCPServer(("", port), HealthHandler) as httpd:
+                    print(f"✅ Health server running on port {port}")
+                    httpd.serve_forever()
+            except Exception as e2:
+                print(f"❌ Could not start health server: {e2}")
+        else:
+            print(f"❌ Could not start health server: {e}")
 
 # ============ BOT APPLICATION ============
 class MovieBot:
     """Main bot application class"""
     
     def __init__(self):
-        self.app = None
+        self.updater = None
         self.handlers = MovieHandlers()
-        self.index_update_task = None
-        self.initialized = False
-    
-    def setup_handlers(self):
-        """Register all handlers with the application"""
-        # Command handlers
-        self.app.add_handler(CommandHandler("start", self.handlers.start))
-        self.app.add_handler(CommandHandler("help", self.handlers.help_command))
-        self.app.add_handler(CommandHandler("search", self.handlers.search))
-        self.app.add_handler(CommandHandler("stats", self.handlers.stats))
-        self.app.add_handler(CommandHandler("update", self.handlers.update_index))
-        self.app.add_handler(CommandHandler("about", self.handlers.about))
-        
-        # Message handler - handle text messages as movie queries
-        self.app.add_handler(
-            MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                self.handlers.handle_movie_query
-            )
-        )
-        
-        # Handler for forwarded messages (to build index)
-        self.app.add_handler(
-            MessageHandler(
-                filters.FORWARDED,
-                self.handlers.handle_forwarded_movie
-            )
-        )
-        
-        # Handler for channel posts (when bot is in channel)
-        self.app.add_handler(
-            MessageHandler(
-                filters.ALL & filters.ChatType.CHANNEL,
-                self.handlers.handle_channel_post
-            )
-        )
-    
-    async def error_handler(self, update, context):
-        """Handle errors"""
-        logger.error(f"Update {update} caused error {context.error}")
-        if update and update.effective_message:
-            try:
-                await update.effective_message.reply_text(
-                    "❌ An error occurred. Please try again later."
-                )
-            except:
-                pass
-    
-    async def auto_update_index(self):
-        """Auto-update channel index every 24 hours"""
-        while not self.initialized:
-            await asyncio.sleep(5)
-        
-        while True:
-            try:
-                index = get_channel_index()
-                if index is None:
-                    await asyncio.sleep(60)
-                    continue
-                    
-                logger.info("🔄 Running auto-update for channel index...")
-                success = await index.build_index()
-                if success:
-                    stats = index.get_stats()
-                    logger.info(f"✅ Auto-update completed: {stats['total_movies']} movies indexed")
-            except Exception as e:
-                logger.error(f"Auto-update error: {e}")
-            
-            await asyncio.sleep(Config.AUTO_UPDATE_INTERVAL)
-    
-    async def initialize_index(self):
-        """Initialize the channel index"""
-        try:
-            logger.info("📂 Initializing channel index...")
-            init_channel_index(self.app)
-            
-            index = get_channel_index()
-            if index:
-                logger.info("📂 Building initial channel index...")
-                await index.build_index()
-                self.initialized = True
-                logger.info("✅ Bot initialization complete!")
-                
-                stats = index.get_stats()
-                if stats['total_movies'] == 0:
-                    logger.info("💡 No movies in index. To add movies:")
-                    logger.info("1. Forward a movie from your channel to this bot")
-                    logger.info("2. The bot will automatically add it to the index")
-                    logger.info("3. Then users can search for it")
-            else:
-                logger.error("❌ Failed to initialize channel index")
-                
-        except Exception as e:
-            logger.error(f"Error during initialization: {e}")
-            self.initialized = True
     
     def run(self):
-        """Start the bot"""
+        """Start the bot using Updater (version 13.15)"""
         try:
+            # Import from version 13.15
+            from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+            
             if not Config.TELEGRAM_TOKEN:
                 raise ValueError("TELEGRAM_TOKEN is required")
             if not Config.OMDB_API_KEY:
@@ -171,25 +79,47 @@ class MovieBot:
             if not Config.CHANNEL_ID:
                 raise ValueError("CHANNEL_ID is required")
             
-            # Start HTTP server in background
+            # Start HTTP server in background for Render
             server_thread = threading.Thread(target=run_health_server, daemon=True)
             server_thread.start()
             time.sleep(1)  # Give server time to start
             
-            # Create application - version 20.8 works with Application
-            self.app = Application.builder().token(Config.TELEGRAM_TOKEN).build()
-            
-            # Setup handlers
-            self.setup_handlers()
-            
-            # Add error handler
-            self.app.add_error_handler(self.error_handler)
+            # Create updater with version 13.15 (no bug)
+            self.updater = Updater(token=Config.TELEGRAM_TOKEN, use_context=True)
+            dispatcher = self.updater.dispatcher
             
             # Initialize index
+            init_channel_index(None)
+            import asyncio
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            loop.run_until_complete(self.initialize_index())
-            loop.create_task(self.auto_update_index())
+            loop.run_until_complete(self.handlers.initialize_index())
+            
+            # Register handlers
+            dispatcher.add_handler(CommandHandler("start", self.handlers.start))
+            dispatcher.add_handler(CommandHandler("help", self.handlers.help_command))
+            dispatcher.add_handler(CommandHandler("search", self.handlers.search))
+            dispatcher.add_handler(CommandHandler("stats", self.handlers.stats))
+            dispatcher.add_handler(CommandHandler("update", self.handlers.update_index))
+            dispatcher.add_handler(CommandHandler("about", self.handlers.about))
+            dispatcher.add_handler(
+                MessageHandler(
+                    Filters.text & ~Filters.command,
+                    self.handlers.handle_movie_query
+                )
+            )
+            dispatcher.add_handler(
+                MessageHandler(
+                    Filters.forwarded,
+                    self.handlers.handle_forwarded_movie
+                )
+            )
+            dispatcher.add_handler(
+                MessageHandler(
+                    Filters.chat_type.channel,
+                    self.handlers.handle_channel_post
+                )
+            )
             
             print("=" * 60)
             print("🤖 Movie Bot is starting...")
@@ -206,12 +136,10 @@ class MovieBot:
             print("=" * 60)
             print("")
             
-            # Start the bot with polling
-            self.app.run_polling(drop_pending_updates=True)
+            # Start polling
+            self.updater.start_polling()
+            self.updater.idle()
             
-        except KeyboardInterrupt:
-            logger.info("Bot stopped by user")
-            print("\n👋 Bot stopped.")
         except Exception as e:
             logger.error(f"Failed to start bot: {e}")
             print(f"\n❌ Error: {e}")
