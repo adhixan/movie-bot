@@ -3,7 +3,7 @@ services:
     name: telegram-movie-bot
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn -w 1 -b 0.0.0.0:$PORT main:flask_app & python main.py
+    startCommand: python main.py
     healthCheckPath: /health
     envVars:
       - key: TELEGRAM_TOKEN
@@ -20,5 +20,5 @@ services:
         value: INFO
       - key: RENDER
         value: true
-      - key: PORT
-        value: 8080
+      - key: PYTHON_VERSION
+        value: 3.11.0
