@@ -1,9 +1,10 @@
-# main.py - Using Application (works with python-telegram-bot 20.0)
+# main.py - Works with python-telegram-bot 20.8
 import sys
 import os
 import asyncio
 import logging
 import threading
+import time
 import http.server
 import socketserver
 from dotenv import load_dotenv
@@ -34,13 +35,28 @@ class HealthHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(b'OK')
         else:
             self.send_response(404)
+    
+    def log_message(self, format, *args):
+        pass  # Suppress logs
 
 def run_health_server():
     """Run a simple HTTP server for Render health checks"""
     port = int(os.environ.get("PORT", 5000))
-    with socketserver.TCPServer(("", port), HealthHandler) as httpd:
-        print(f"✅ Health server running on port {port}")
-        httpd.serve_forever()
+    
+    # Try to bind with retry
+    for attempt in range(3):
+        try:
+            with socketserver.TCPServer(("", port), HealthHandler) as httpd:
+                print(f"✅ Health server running on port {port}")
+                httpd.serve_forever()
+            break
+        except OSError as e:
+            if "Address already in use" in str(e):
+                print(f"⚠️ Port {port} busy, trying {port + 1}")
+                port += 1
+            else:
+                print(f"❌ Health server error: {e}")
+                break
 
 # ============ BOT APPLICATION ============
 class MovieBot:
@@ -131,6 +147,16 @@ class MovieBot:
                 await index.build_index()
                 self.initialized = True
                 logger.info("✅ Bot initialization complete!")
+                
+                stats = index.get_stats()
+                if stats['total_movies'] == 0:
+                    logger.info("💡 No movies in index. To add movies:")
+                    logger.info("1. Forward a movie from your channel to this bot")
+                    logger.info("2. The bot will automatically add it to the index")
+                    logger.info("3. Then users can search for it")
+            else:
+                logger.error("❌ Failed to initialize channel index")
+                
         except Exception as e:
             logger.error(f"Error during initialization: {e}")
             self.initialized = True
@@ -148,8 +174,9 @@ class MovieBot:
             # Start HTTP server in background
             server_thread = threading.Thread(target=run_health_server, daemon=True)
             server_thread.start()
+            time.sleep(1)  # Give server time to start
             
-            # Create application
+            # Create application - version 20.8 works with Application
             self.app = Application.builder().token(Config.TELEGRAM_TOKEN).build()
             
             # Setup handlers
@@ -175,10 +202,16 @@ class MovieBot:
             print("2. The bot will automatically index it")
             print("3. Users can then search for it")
             print("")
+            print("✅ Bot is running!")
+            print("=" * 60)
+            print("")
             
-            # Start the bot
+            # Start the bot with polling
             self.app.run_polling(drop_pending_updates=True)
             
+        except KeyboardInterrupt:
+            logger.info("Bot stopped by user")
+            print("\n👋 Bot stopped.")
         except Exception as e:
             logger.error(f"Failed to start bot: {e}")
             print(f"\n❌ Error: {e}")
