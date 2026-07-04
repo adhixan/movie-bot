@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: telegram-movie-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 1 -b 0.0.0.0:$PORT main:flask_app & python main.py
+    healthCheckPath: /health
+    envVars:
+      - key: TELEGRAM_TOKEN
+        sync: false
+      - key: CHANNEL_ID
+        sync: false
+      - key: OMDB_API_KEY
+        sync: false
+      - key: TMDB_API_KEY
+        sync: false
+      - key: RAPIDAPI_KEY
+        sync: false
+      - key: LOG_LEVEL
+        value: INFO
+      - key: RENDER
+        value: true
+      - key: PORT
+        value: 8080

@@ -1,0 +1,27 @@
+{
+  "movies": {
+    "taken extended cut yify": {
+      "clean_name": "taken extended cut yify",
+      "file_name": "Taken 2008 Extended Cut 720p.BrRip.x264.YIFY.mp4",
+      "message_id": 64,
+      "file_id": "BQACAgQAAyEFAAMBCZDXhwADD2pIrbqe_7JT5h1kP8-xQzkvpgceAAJWBQAC_oSYUj_I71ESjPtUPAQ",
+      "file_type": "document",
+      "file_size": 575756808,
+      "date": "2026-07-04T07:12:45.198232",
+      "source_channel": -1004455454599
+    },
+    "ssdmovies oru muthassi gadha ( ) malayalam hdrip": {
+      "clean_name": "ssdmovies oru muthassi gadha ( ) malayalam hdrip",
+      "file_name": "SSDMovies Oru Muthassi Gadha (2016) Malayalam HDRip.mkv",
+      "message_id": 79,
+      "file_id": "BQACAgQAAyEFAAMBCZDXhwADDWpIqzjDvz5rdV1EBy2u1TwQwJLUAAIJCgACkdXYUEY-2XlZpEDrPAQ",
+      "file_type": "document",
+      "file_size": 1286200428,
+      "date": "2026-07-04T07:17:24.659732",
+      "source_channel": 8777917763
+    }
+  },
+  "last_updated": "2026-07-04T07:17:24.659744",
+  "total_movies": 2,
+  "channel_id": -1004455454599
+}
