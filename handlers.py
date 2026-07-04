@@ -1,4 +1,4 @@
-# handlers.py - Using Application (works with python-telegram-bot 20.0)
+# handlers.py - Updated for version 20.8
 import asyncio
 import logging
 from datetime import datetime
