@@ -1,4 +1,4 @@
-# handlers.py
+# handlers.py - Compatible with python-telegram-bot 13.15
 import asyncio
 import logging
 from datetime import datetime
